@@ -2,9 +2,10 @@
 pragma solidity ^0.8.18;
 
 import { ERC1155 } from "openzeppelin-contracts/token/ERC1155.sol";
+import { IWETH } from "./interfaces/IWETH.sol";
 
 contract PreLaunch is ERC1155 {
-    address WETHContract;
+    IWETH WETHContract;
     address oracles;
 
     constructor(address init_, string calldata uri_) ERC1155(uri_) {
