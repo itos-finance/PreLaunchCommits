@@ -12,3 +12,6 @@
 [submodule "lib/canonical-weth"]
 	path = lib/canonical-weth
 	url = https://github.com/gnosis/canonical-weth
+[submodule "lib/Commons"]
+	path = lib/Commons
+	url = https://github.com/itos-finance/Commons
