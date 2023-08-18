@@ -10,6 +10,7 @@ import {X128} from "Math/Ops.sol";
 import {FullMath} from "Math/FullMath.sol";
 import {Timed, TimedEntry} from "Util/Timed.sol";
 import {IPreLaunchLP} from "./interfaces/IPreLaunchLP.sol";
+import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
 
 // A contract for recording prelaunch LP commits
 /// While this contract gives the Itos total flexibility in using this liquidity, there is real legal
@@ -29,11 +30,14 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
        delegate initializer contract */
     IWETH public WETHContract;
     address[] public usableTokens;
-    address public oracle;
+    IPriceOracle public oracle;
 
     /* No init */
     uint256 public outstandingShares;
     mapping(address => uint256) public lpValue;
+
+    /// The time needed for any execute to take effect.
+    uint256 public constant DELAY = 5 days;
 
     constructor(address init_, bytes memory data) ERC20("ItosPreLP", "IpLP") {
         AdminLib.initOwner(msg.sender);
@@ -76,7 +80,7 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
         for (uint8 i = 0; i < usableTokens.length; ++i) {
             address current = usableTokens[i];
             uint256 priceX128;
-            // priceX128 = oracle.price());
+            priceX128 = oracle.price(current);
             uint256 balance = IERC20Minimal(current).balanceOf(address(this));
             if (current == token) {
                 tokenPriceX128 = priceX128;
@@ -120,7 +124,7 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
     function execute(bytes calldata args) external {
         AdminLib.validateOwner();
         TimedEntry memory e = Timed.fetchAndDelete(0);
-        if ((uint64(block.timestamp) - e.timestamp) < 1 weeks) {
+        if ((uint64(block.timestamp) - e.timestamp) < DELAY) {
             revert PrematureExecution();
         }
         // Should just be owner, but if owner changes they can't use the old precommit.
