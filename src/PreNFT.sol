@@ -29,7 +29,7 @@ contract PreLaunchNFT is ERC721 {
     /// must increment up from the previous mint. I.e. the first mint for category 2 would be
     /// (2 << 128) + 1.
     function mint(address to, uint256 tokenId) external {
-        uint8 choice = uint8(tokenID >> 128);
+        uint8 choice = uint8(tokenId >> 128);
         if (choice >= NUM_CHOICES) {
             revert InvalidChoice(choice);
         }
