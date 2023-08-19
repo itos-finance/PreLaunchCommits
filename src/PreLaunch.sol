@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.17;
 
+import {console2} from "forge-std/console2.sol";
+
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 import {ContractLib} from "Util/Contract.sol";
@@ -55,6 +57,10 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
                 revert InitializationError(init_, data);
             }
         }
+
+        console2.log("WEHT", address(WETHContract));
+        console2.log("tokens", usableTokens.length);
+        console2.log("oracle", address(oracle));
     }
 
     /// @inheritdoc IPreLaunchLP
@@ -74,11 +80,13 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
             // allowances.
             IERC20Minimal(token).transferFrom(msg.sender, address(this), amount);
         }
+        console2.log("token", token);
 
         uint256 tokenPriceX128;
         uint256 totalValue;
         for (uint8 i = 0; i < usableTokens.length; ++i) {
             address current = usableTokens[i];
+            console2.log("current", current);
             uint256 priceX128;
             priceX128 = oracle.price(current);
             uint256 balance = IERC20Minimal(current).balanceOf(address(this));
@@ -106,7 +114,7 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
 
         uint256 value = X128.mul256RoundUp(amount, tokenPriceX128);
         lpValue[recipient] += value;
-        uint256 shares = FullMath.mulDiv(outstandingShares, value, totalValue);
+        uint256 shares = totalValue == 0 ? value : FullMath.mulDiv(outstandingShares, value, totalValue);
         outstandingShares += shares;
 
         _mint(recipient, shares);
