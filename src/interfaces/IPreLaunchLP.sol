@@ -2,8 +2,8 @@
 pragma solidity ^0.8.17;
 
 interface IPreLaunchLP {
-    /// Query the USD value of committed by an individual. Value is determined at the time of commit.
-    function lpValue(address lper) external returns (uint256 value);
+    /// Query the USD value of committed by an individual as an X128 number. Value is determined at the time of commit.
+    function lpValue(address lper) external returns (uint256 valueX128);
 
     /// Commit liquidity while saving some gas by reducing calldata size.
     function l2LP(bytes calldata data) external payable;

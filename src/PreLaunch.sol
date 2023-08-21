@@ -13,19 +13,17 @@ import {FullMath} from "Math/FullMath.sol";
 import {Timed, TimedEntry} from "Util/Timed.sol";
 import {IPreLaunchLP} from "./interfaces/IPreLaunchLP.sol";
 import {IPriceOracle} from "./interfaces/IPriceOracle.sol";
+import {IItosPoints1} from "./interfaces/IPoints.sol";
 
 // A contract for recording prelaunch LP commits
 /// While this contract gives the Itos total flexibility in using this liquidity, there is real legal
 /// recourse for misuse of funds, the founders are doxxed, none of our employees are anon, and this is
 /// owned and managed by a multi-sig.
 contract PreLaunchLP is IPreLaunchLP, ERC20 {
-    error InitializationError(address init, bytes data);
     error InvalidTokenEntry();
     error PrematureExecution();
     error PrecommitOwnerMismatch();
     error ExecutionError(address executor, bytes args);
-    /// Somehow someones committed more liquidity than we can handle.
-    error OverCommitment();
 
     /* Needs Initialization from init contract */
     /* The same exact storage variables are at the same slots in the
@@ -33,6 +31,7 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
     IWETH public WETHContract;
     address[] public usableTokens;
     IPriceOracle public oracle;
+    IItosPoints1 public points;
 
     /* No init */
     uint256 public outstandingShares;
@@ -41,26 +40,26 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
     /// The time needed for any execute to take effect.
     uint256 public constant DELAY = 5 days;
 
-    constructor(address init_, bytes memory data) ERC20("ItosPreLP", "IpLP") {
+    constructor(address _weth, address[] memory _tokens, address _oracle, address _points)
+        ERC20("ItosPreLP", "ItosLP")
+    {
         AdminLib.initOwner(msg.sender);
 
-        ContractLib.assertContract(init_);
-        (bool success, bytes memory err) = init_.delegatecall(data);
-        if (!success) {
-            if (err.length > 0) {
-                /// @solidity memory-safe-assembly
-                assembly {
-                    let returndata_size := mload(err)
-                    revert(add(32, err), returndata_size)
-                }
-            } else {
-                revert InitializationError(init_, data);
-            }
+        WETHContract = IWETH(_weth);
+        oracle = IPriceOracle(_oracle);
+        points = IItosPoints1(_points);
+
+        bool includedWeth = false;
+
+        for (uint16 i = 0; i < _tokens.length; ++i) {
+            usableTokens.push(_tokens[i]);
+            includedWeth = includedWeth || (_tokens[i] == _weth);
         }
 
-        console2.log("WEHT", address(WETHContract));
-        console2.log("tokens", usableTokens.length);
-        console2.log("oracle", address(oracle));
+        // Just make sure Weth is in the list.
+        if (!includedWeth) {
+            usableTokens.push(_weth);
+        }
     }
 
     /// @inheritdoc IPreLaunchLP
@@ -80,30 +79,19 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
             // allowances.
             IERC20Minimal(token).transferFrom(msg.sender, address(this), amount);
         }
-        console2.log("token", token);
 
         uint256 tokenPriceX128;
-        uint256 totalValue;
+        uint256 totalValueX128;
         for (uint8 i = 0; i < usableTokens.length; ++i) {
             address current = usableTokens[i];
-            console2.log("current", current);
             uint256 priceX128;
             priceX128 = oracle.price(current);
             uint256 balance = IERC20Minimal(current).balanceOf(address(this));
             if (current == token) {
                 tokenPriceX128 = priceX128;
-                // Don't include our transfered amounts in the new balance.
-                (uint256 bot, uint256 top) = X128.mul512RoundUp(priceX128, balance - amount);
-                if (top > 0) {
-                    revert OverCommitment();
-                }
-                totalValue += bot;
+                totalValueX128 += priceX128 * (balance - amount);
             } else {
-                (uint256 bot, uint256 top) = X128.mul512RoundUp(priceX128, balance);
-                if (top > 0) {
-                    revert OverCommitment();
-                }
-                totalValue += bot;
+                totalValueX128 += priceX128 * balance;
             }
         }
 
@@ -112,16 +100,27 @@ contract PreLaunchLP is IPreLaunchLP, ERC20 {
             revert InvalidTokenEntry();
         }
 
-        uint256 value = X128.mul256RoundUp(amount, tokenPriceX128);
-        lpValue[recipient] += value;
-        uint256 shares = totalValue == 0 ? value : FullMath.mulDiv(outstandingShares, value, totalValue);
-        outstandingShares += shares;
+        uint256 valueX128 = amount * tokenPriceX128;
+        lpValue[recipient] += valueX128;
 
+        uint256 shares;
+        if (totalValueX128 == 0) {
+            // This is the first time anyone has LPed.
+            // Our ERC20 has 18 decimals. Each share is roughly worth a dollar.
+            shares = X128.mul256RoundUp(uint128(1e18), valueX128);
+        } else {
+            shares = FullMath.mulDiv(outstandingShares, valueX128, totalValueX128);
+        }
+
+        outstandingShares += shares;
         _mint(recipient, shares);
+        // We also give the user points.
+        points.mint(recipient, shares);
     }
 
     /// We prerecord the contract we'll want to delegate call into for transparency.
     /// If we act misappropriately, users and investors can initiate recourse well before we take action.
+    /// Can also be used to veto by giving the null address.
     function preExecute(bytes calldata executorAddress) external {
         AdminLib.validateOwner();
         Timed.precommit(0, executorAddress);
