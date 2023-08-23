@@ -1,10 +1,10 @@
 # PreLaunch Commitment Incentives for Itos Finance
 
-There is a PreLaunch LP contract we'll deploy on multiple chains letting users commit liquidity before the launch.
+This is a PreLaunch LP contract we'll deploy on multiple chains to let users commit liquidity before the launch.
 
 In return they receive share tokens they can use to redeem the liquidity after the commitment period of two years has passed.
 
-They will also be periodic rewards for the holders of these tokens. These tokens are fully trade-able to derisk if a user no longer wants to be a stakeholder in Itos.
+There will also be periodic rewards for the holders of these tokens. These tokens are fully trade-able to derisk if a user no longer wants to be a stakeholder in Itos.
 
 For every 10K nominal USD value committed by an individual they can mint one of our prelaunch NFTs for free.
 
